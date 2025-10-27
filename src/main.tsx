@@ -6,7 +6,4 @@ createRoot(document.getElementById("root")!).render(<App />);
 
 
 
-import TestSupabase from "@/pages/TestSupabase";
-
-<Route path="/test" element={<TestSupabase />} />
 
