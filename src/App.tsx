@@ -17,6 +17,7 @@ import HealthLifestyle from "./pages/health/HealthLifestyle";
 import HealthReminders from "./pages/health/HealthReminders";
 import HealthInsights from "./pages/health/HealthInsights";
 import HealthEmotions from "./pages/health/HealthEmotions";
+import SafetyInteractive from "./pages/SafetyInteractive";
 
 
 const queryClient = new QueryClient();
@@ -43,6 +44,8 @@ const App = () => (
 <Route path="/health/lifestyle" element={<HealthLifestyle />} />
 <Route path="/health/reminders" element={<HealthReminders />} />
 <Route path="/health/insights" element={<HealthInsights />} />
+
+<Route path="/safety" element={<SafetyInteractive />} />
 
 
           {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}

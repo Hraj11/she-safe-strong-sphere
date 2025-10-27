@@ -1,4 +1,3 @@
-// src/pages/health/HealthHydration.tsx
 import React, { useState, useEffect } from "react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -6,199 +5,141 @@ import { Input } from "@/components/ui/input";
 import {
   LineChart,
   Line,
+  CartesianGrid,
   XAxis,
   YAxis,
-  CartesianGrid,
   Tooltip,
   ResponsiveContainer,
-  Legend,
 } from "recharts";
 
-interface DayLog {
-  date: string;
-  waterIntake: number;
-  sleepHours: number;
-}
+const defaultWeek = [
+  { day: "Mon", water: 0, sleep: 0 },
+  { day: "Tue", water: 0, sleep: 0 },
+  { day: "Wed", water: 0, sleep: 0 },
+  { day: "Thu", water: 0, sleep: 0 },
+  { day: "Fri", water: 0, sleep: 0 },
+  { day: "Sat", water: 0, sleep: 0 },
+  { day: "Sun", water: 0, sleep: 0 },
+];
 
-const HealthHydration: React.FC = () => {
-  const [waterInput, setWaterInput] = useState("");
-  const [sleepInput, setSleepInput] = useState("");
-  const [log, setLog] = useState<DayLog[]>([]);
-  const [goalWater, setGoalWater] = useState(2000); // ml
-  const [goalSleep, setGoalSleep] = useState(8); // hrs
+export default function HealthHydration() {
+  const [weekData, setWeekData] = useState(defaultWeek);
+  const [selectedDay, setSelectedDay] = useState("Mon");
+  const [water, setWater] = useState("");
+  const [sleep, setSleep] = useState("");
 
-  // Load existing log from localStorage
+  // Load saved data on mount
   useEffect(() => {
-    const saved = localStorage.getItem("hydrationSleepLog");
-    if (saved) setLog(JSON.parse(saved));
+    const savedData = localStorage.getItem("healthWeekData");
+    if (savedData) {
+      setWeekData(JSON.parse(savedData));
+    }
   }, []);
 
-  // Save log to localStorage
+  // Save data whenever it changes
   useEffect(() => {
-    localStorage.setItem("hydrationSleepLog", JSON.stringify(log));
-  }, [log]);
+    localStorage.setItem("healthWeekData", JSON.stringify(weekData));
+  }, [weekData]);
 
-  // Add daily entry
-  const addEntry = () => {
-    if (!waterInput || !sleepInput) return;
-
-    const today = new Date().toLocaleDateString("en-GB");
-    const existing = log.find((entry) => entry.date === today);
-
-    if (existing) {
-      // update existing entry
-      setLog((prev) =>
-        prev.map((e) =>
-          e.date === today
-            ? {
-                ...e,
-                waterIntake: Number(waterInput),
-                sleepHours: Number(sleepInput),
-              }
-            : e
-        )
-      );
-    } else {
-      setLog((prev) => [
-        ...prev,
-        {
-          date: today,
-          waterIntake: Number(waterInput),
-          sleepHours: Number(sleepInput),
-        },
-      ]);
-    }
-
-    setWaterInput("");
-    setSleepInput("");
+  const handleSave = () => {
+    const updated = weekData.map((d) =>
+      d.day === selectedDay
+        ? {
+            ...d,
+            water: parseFloat(water) || 0,
+            sleep: parseFloat(sleep) || 0,
+          }
+        : d
+    );
+    setWeekData(updated);
+    setWater("");
+    setSleep("");
   };
 
-  // Compute average
   const avgWater =
-    log.length > 0
-      ? (log.reduce((sum, e) => sum + e.waterIntake, 0) / log.length).toFixed(0)
-      : 0;
+    weekData.reduce((sum, d) => sum + d.water, 0) / weekData.length;
   const avgSleep =
-    log.length > 0
-      ? (log.reduce((sum, e) => sum + e.sleepHours, 0) / log.length).toFixed(1)
-      : 0;
+    weekData.reduce((sum, d) => sum + d.sleep, 0) / weekData.length;
 
-  // Personalized suggestions
-  const getSuggestions = () => {
-    const suggestions: string[] = [];
-
-    if (Number(avgWater) < goalWater)
-      suggestions.push("💧 Drink more water to stay hydrated.");
-    else
-      suggestions.push("✅ Great! You’re meeting your hydration goal.");
-
-    if (Number(avgSleep) < goalSleep)
-      suggestions.push("😴 Try to get a bit more sleep for optimal recovery.");
-    else
-      suggestions.push("🌙 Awesome! You’re sleeping enough.");
-
-    if (Number(avgSleep) > 9)
-      suggestions.push("⚠️ Oversleeping may affect energy balance — monitor your routine.");
-
-    if (Number(avgWater) > 4000)
-      suggestions.push("⚠️ You might be overhydrating; avoid excessive water intake.");
-
-    return suggestions;
-  };
-
-  const suggestions = getSuggestions();
+  const waterFeedback =
+    avgWater >= 2 ? "💧 Great hydration level!" : "⚠️ Drink more water!";
+  const sleepFeedback =
+    avgSleep >= 7 ? "😴 Healthy sleep pattern!" : "⚠️ Try to get more rest!";
 
   return (
-    <div className="p-6 max-w-5xl mx-auto space-y-10">
-      <h1 className="text-3xl font-bold text-center text-blue-600">
-        💧 Hydration & Sleep Tracker
-      </h1>
+    <div className="p-6 space-y-6">
+      <h2 className="text-2xl font-bold mb-4 text-center">
+        🧘 Hydration & Sleep Tracker (Weekly)
+      </h2>
 
       {/* Input Section */}
-      <Card className="p-6 shadow-md border-blue-200">
-        <CardContent className="space-y-4">
-          <h2 className="text-xl font-semibold text-blue-500 text-center">
-            Log Today’s Data
-          </h2>
+      <Card className="p-4">
+        <CardContent className="flex flex-col md:flex-row items-center gap-4">
+          <select
+            className="border p-2 rounded w-full md:w-32"
+            value={selectedDay}
+            onChange={(e) => setSelectedDay(e.target.value)}
+          >
+            {weekData.map((d) => (
+              <option key={d.day} value={d.day}>
+                {d.day}
+              </option>
+            ))}
+          </select>
 
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-            <Input
-              type="number"
-              placeholder="Water intake (ml)"
-              value={waterInput}
-              onChange={(e) => setWaterInput(e.target.value)}
-            />
-            <Input
-              type="number"
-              placeholder="Sleep hours"
-              value={sleepInput}
-              onChange={(e) => setSleepInput(e.target.value)}
-            />
-            <Button onClick={addEntry}>Add Entry</Button>
-          </div>
+          <Input
+            type="number"
+            placeholder="Water (litres)"
+            value={water}
+            onChange={(e) => setWater(e.target.value)}
+          />
+          <Input
+            type="number"
+            placeholder="Sleep (hours)"
+            value={sleep}
+            onChange={(e) => setSleep(e.target.value)}
+          />
+          <Button onClick={handleSave}>Save</Button>
         </CardContent>
       </Card>
 
       {/* Graph Section */}
-      <Card className="p-6 shadow-md border-green-200">
-        <CardContent>
-          <h2 className="text-xl font-semibold text-green-600 text-center mb-4">
-            📊 Weekly Trends
-          </h2>
-          <ResponsiveContainer width="100%" height={300}>
-            <LineChart data={log}>
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+        <Card className="p-4">
+          <h3 className="font-semibold mb-2 text-center">💧 Water Intake</h3>
+          <ResponsiveContainer width="100%" height={250}>
+            <LineChart data={weekData}>
               <CartesianGrid strokeDasharray="3 3" />
-              <XAxis dataKey="date" />
-              <YAxis />
+              <XAxis dataKey="day" />
+              <YAxis domain={[0, 5]} />
               <Tooltip />
-              <Legend />
-              <Line
-                type="monotone"
-                dataKey="waterIntake"
-                stroke="#3b82f6"
-                name="Water (ml)"
-              />
-              <Line
-                type="monotone"
-                dataKey="sleepHours"
-                stroke="#9333ea"
-                name="Sleep (hrs)"
-              />
+              <Line type="monotone" dataKey="water" stroke="#007BFF" />
             </LineChart>
           </ResponsiveContainer>
-        </CardContent>
-      </Card>
+        </Card>
+
+        <Card className="p-4">
+          <h3 className="font-semibold mb-2 text-center">😴 Sleep Hours</h3>
+          <ResponsiveContainer width="100%" height={250}>
+            <LineChart data={weekData}>
+              <CartesianGrid strokeDasharray="3 3" />
+              <XAxis dataKey="day" />
+              <YAxis domain={[0, 10]} />
+              <Tooltip />
+              <Line type="monotone" dataKey="sleep" stroke="#00C49F" />
+            </LineChart>
+          </ResponsiveContainer>
+        </Card>
+      </div>
 
       {/* Summary Section */}
-      <Card className="p-6 shadow-md border-purple-200">
-        <CardContent className="text-center space-y-2">
-          <h2 className="text-xl font-semibold text-purple-600 mb-2">
-            📈 Summary
-          </h2>
-          <p>
-            Average Water Intake: <b>{avgWater} ml</b> (Goal: {goalWater} ml)
-          </p>
-          <p>
-            Average Sleep: <b>{avgSleep} hrs</b> (Goal: {goalSleep} hrs)
-          </p>
-        </CardContent>
-      </Card>
-
-      {/* Suggestions Section */}
-      <Card className="p-6 shadow-md border-pink-200">
-        <CardContent>
-          <h2 className="text-xl font-semibold text-pink-600 mb-3 text-center">
-            💡 Personalized Suggestions
-          </h2>
-          <ul className="list-disc pl-6 space-y-1 text-gray-700">
-            {suggestions.map((s, i) => (
-              <li key={i}>{s}</li>
-            ))}
-          </ul>
-        </CardContent>
+      <Card className="p-4 text-center space-y-2">
+        <h3 className="font-semibold">Weekly Summary</h3>
+        <p>Average Water Intake: {avgWater.toFixed(1)} L</p>
+        <p>Average Sleep: {avgSleep.toFixed(1)} hrs</p>
+        <p className="text-blue-600">{waterFeedback}</p>
+        <p className="text-green-600">{sleepFeedback}</p>
       </Card>
     </div>
   );
-};
-
-export default HealthHydration;
+}
