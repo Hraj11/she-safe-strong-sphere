@@ -3,3 +3,10 @@ import App from "./App.tsx";
 import "./index.css";
 
 createRoot(document.getElementById("root")!).render(<App />);
+
+
+
+import TestSupabase from "@/pages/TestSupabase";
+
+<Route path="/test" element={<TestSupabase />} />
+
