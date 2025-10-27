@@ -7,6 +7,7 @@ import Index from "./pages/Index";
 import Safety from "./pages/Safety";
 import Sakhi from "./pages/Sakhi";
 import Stem from "./pages/Stem";
+import HealthDashboard from "./pages/HealthDashboard";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -22,6 +23,7 @@ const App = () => (
           <Route path="/safety" element={<Safety />} />
           <Route path="/sakhi" element={<Sakhi />} />
           <Route path="/stem" element={<Stem />} />
+          <Route path="/health" element={<HealthDashboard />} />
           {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
           <Route path="*" element={<NotFound />} />
         </Routes>
