@@ -11,12 +11,12 @@ import NotFound from "./pages/NotFound";
 import HealthDashboard from "./pages/HealthDashboard";
 import HealthDiet from "./pages/HealthDiet";
 import HealthExercise from "./pages/HealthExercise";
-import HealthCycle from "./pages/HealthCycle";
-import HealthHydration from "./pages/HealthHydration";
-import HealthLifestyle from "./pages/HealthLifestyle";
-import HealthReminders from "./pages/HealthReminders";
-import HealthInsights from "./pages/HealthInsights";
-import HealthEmotions from "./pages/HealthEmotions";
+import HealthCycle from "./pages/health/HealthCycle";
+import HealthHydration from "./pages/health/HealthHydration";
+import HealthLifestyle from "./pages/health/HealthLifestyle";
+import HealthReminders from "./pages/health/HealthReminders";
+import HealthInsights from "./pages/health/HealthInsights";
+import HealthEmotions from "./pages/health/HealthEmotions";
 
 
 const queryClient = new QueryClient();
@@ -35,7 +35,7 @@ const App = () => (
           <Route path="/health" element={<HealthDashboard />} />
 <Route path="/health/diet" element={<HealthDiet />} />
 <Route path="/health/exercise" element={<HealthExercise />} />
-          <Route path="/health/cycle" element={<HealthCycle />} />
+          <Route path="/pages/health/cycle" element={<HealthCycle />} />
           <Route path="/health/hydration" element={<HealthHydration />} />
 <Route path="/health/diet" element={<HealthDiet />} />
 <Route path="/health/emotions" element={<HealthEmotions />} />
