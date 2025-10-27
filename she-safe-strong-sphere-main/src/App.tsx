@@ -35,7 +35,7 @@ const App = () => (
           <Route path="/health" element={<HealthDashboard />} />
 <Route path="/health/diet" element={<HealthDiet />} />
 <Route path="/health/exercise" element={<HealthExercise />} />
-          <Route path="/pages/health/cycle" element={<HealthCycle />} />
+          <Route path="/health/cycle" element={<HealthCycle />} />
           <Route path="/health/hydration" element={<HealthHydration />} />
 <Route path="/health/diet" element={<HealthDiet />} />
 <Route path="/health/emotions" element={<HealthEmotions />} />
