@@ -2,6 +2,7 @@ import { LucideIcon } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { ArrowRight } from "lucide-react";
+import { Link } from "react-router-dom";
 
 interface FeatureCardProps {
   icon: LucideIcon;
@@ -31,9 +32,11 @@ const FeatureCard = ({ icon: Icon, title, description, color, link }: FeatureCar
       </div>
       <h3 className="font-display text-xl font-bold mb-2 text-foreground">{title}</h3>
       <p className="text-muted-foreground mb-4">{description}</p>
-      <Button variant="ghost" className="p-0 h-auto font-semibold group-hover:gap-2 transition-all">
-        Explore <ArrowRight className="w-4 h-4 ml-1 group-hover:translate-x-1 transition-transform" />
-      </Button>
+      <Link to={link}>
+        <Button variant="ghost" className="p-0 h-auto font-semibold group-hover:gap-2 transition-all">
+          Explore <ArrowRight className="w-4 h-4 ml-1 group-hover:translate-x-1 transition-transform" />
+        </Button>
+      </Link>
     </Card>
   );
 };
