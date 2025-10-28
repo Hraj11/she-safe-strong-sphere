@@ -1,4 +1,5 @@
 import { SafetyDataService } from "@/utils/safetyData";
+import { NotificationService } from "@/utils/notifications";
 import { HospitalDataService } from "@/utils/hospitalData";
 import { CrimeDataService } from "@/utils/crimeData";
 import { geocodeAddress, getPlaceSuggestions } from "@/utils/geocoding";
@@ -79,6 +80,7 @@ const flagIcon = new L.Icon({
   shadowSize: [41, 41]
 });
 
+
 const Safety = () => {
   const [currentLocation, setCurrentLocation] = useState("Getting location...");
   const [safetyLevel, setSafetyLevel] = useState<"safe" | "moderate" | "caution">("safe");
@@ -86,6 +88,26 @@ const Safety = () => {
   const [showModal, setShowModal] = useState(false);
   const [sharingActive, setSharingActive] = useState(false);
   const [routeData, setRouteData] = useState<any>(null);
+  const [notificationPermission, setNotificationPermission] = useState<NotificationPermission>('default');
+  useEffect(() => {
+  getUserLocation();
+  setupNotifications();
+}, []);
+
+const setupNotifications = async () => {
+  // Register service worker
+  if ('serviceWorker' in navigator) {
+    try {
+      await navigator.serviceWorker.register('/sw.js');
+      console.log('Service Worker registered');
+    } catch (error) {
+      console.log('Service Worker registration failed:', error);
+    }
+  }
+  
+  // Check notification permission
+  setNotificationPermission(Notification.permission);
+};
   
   
   // New states
@@ -112,6 +134,109 @@ const Safety = () => {
 const [showSuggestions, setShowSuggestions] = useState(false);
 const [emergencyContacts, setEmergencyContacts] = useState<any[]>([]);
 const [showEmergencyModal, setShowEmergencyModal] = useState(false);
+const [safetyCheckins, setSafetyCheckins] = useState<any[]>([]);
+const [activeCheckin, setActiveCheckin] = useState<any>(null);
+const [checkinTimer, setCheckinTimer] = useState<NodeJS.Timeout | null>(null);
+const [showCheckinModal, setShowCheckinModal] = useState(false);
+const [checkinDuration, setCheckinDuration] = useState(30); // Default 30 minutes
+// Safety check-in functions
+const startSafetyCheckin = async (durationMinutes: number = 30) => {
+  if (!userCoordinates) {
+    alert('Please enable location services to start safety check-in.');
+    return;
+  }
+  
+  const checkin = {
+    id: Date.now(),
+    startTime: new Date(),
+    endTime: new Date(Date.now() + durationMinutes * 60000),
+    duration: durationMinutes,
+    location: currentLocation,
+    coordinates: userCoordinates,
+    status: 'active'
+  };
+  
+  setActiveCheckin(checkin);
+  setSafetyCheckins(prev => [...prev, checkin]);
+  setShowCheckinModal(false);
+  
+  // Set timer for automatic alert
+  const timer = setTimeout(() => {
+    handleCheckinExpired(checkin);
+  }, durationMinutes * 60000);
+  
+  setCheckinTimer(timer);
+  
+  // Show reminder notification 5 minutes before expiry
+  setTimeout(() => {
+    NotificationService.showCheckinReminder(5);
+  }, (durationMinutes - 5) * 60000);
+  
+  alert(`✅ Safety check-in started! We'll alert your contacts if you don't check in within ${durationMinutes} minutes.`);
+};
+
+const completeSafetyCheckin = () => {
+  if (checkinTimer) {
+    clearTimeout(checkinTimer);
+    setCheckinTimer(null);
+  }
+  
+  if (activeCheckin) {
+    const updatedCheckin = {
+      ...activeCheckin,
+      status: 'completed',
+      completedAt: new Date()
+    };
+    
+    setSafetyCheckins(prev => 
+      prev.map(checkin => 
+        checkin.id === activeCheckin.id ? updatedCheckin : checkin
+      )
+    );
+  }
+  
+  setActiveCheckin(null);
+  alert('✅ Safety check-in completed! You are safe.');
+};
+
+const handleCheckinExpired = async (checkin: any) => {
+  // Send alerts to emergency contacts
+  if (emergencyContacts.length > 0) {
+    emergencyContacts.forEach(contact => {
+      // In a real app, you would send SMS/email here
+      console.log(`Alerting ${contact.name} at ${contact.phone}: Safety check-in expired at ${checkin.location}`);
+    });
+  }
+  
+  // Show notification
+  await NotificationService.showCheckinExpired(checkin.location);
+  
+  // Update check-in status
+  const expiredCheckin = {
+    ...checkin,
+    status: 'expired',
+    expiredAt: new Date()
+  };
+  
+  setSafetyCheckins(prev => 
+    prev.map(c => c.id === checkin.id ? expiredCheckin : c)
+  );
+  
+  setActiveCheckin(null);
+  setCheckinTimer(null);
+  
+  alert('🚨 heck-in expired! Your emergency contacts have been notified.');
+};
+
+const cancelSafetyCheckin = () => {
+  if (checkinTimer) {
+    clearTimeout(checkinTimer);
+    setCheckinTimer(null);
+  }
+  
+  setActiveCheckin(null);
+  alert('Safety check-in cancelled.');
+};
 const [newContact, setNewContact] = useState({
   name: "",
   phone: "",
@@ -1211,6 +1336,27 @@ useEffect(() => {
               <Flag className="mr-2 w-4 h-4" />
               Set Destination
             </Button>
+            {/* Add to Quick Actions grid */}
+<Button 
+  variant="outline" 
+  className="border-2"
+  onClick={() => setShowCheckinModal(true)}
+  disabled={!!activeCheckin}
+>
+  <CheckCircle className="mr-2 w-4 h-4" />
+  {activeCheckin ? 'Check-in Active' : 'Safety Check-in'}
+</Button>
+
+{activeCheckin && (
+  <Button 
+    variant="outline" 
+    className="border-2 bg-green-100 border-green-500"
+    onClick={completeSafetyCheckin}
+  >
+    <CheckCircle className="mr-2 w-4 h-4" />
+    I'm Safe - Check In
+  </Button>
+)}
           </div>
         </Card>
       </div>
@@ -1523,6 +1669,70 @@ useEffect(() => {
             )}
                     </Button>
                 </div>
+      </div>
+    </div>
+  </div>
+)}
+{/* Safety Check-in Modal */}
+{showCheckinModal && (
+  <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+    <div className="bg-white p-6 rounded-2xl shadow-2xl w-full max-w-md">
+      <button
+        onClick={() => setShowCheckinModal(false)}
+        className="absolute top-4 right-4 text-gray-500 hover:text-black"
+      >
+        <X className="w-6 h-6" />
+      </button>
+      
+      <h2 className="text-2xl font-bold mb-4 flex items-center gap-2">
+        <CheckCircle className="text-green-500" />
+        Safety Check-in
+      </h2>
+
+      <div className="space-y-4">
+        <div>
+          <label className="block text-sm font-medium mb-2">Check-in Duration</label>
+          <div className="grid grid-cols-3 gap-2">
+            {[15, 30, 60].map((minutes) => (
+              <button
+                key={minutes}
+                type="button"
+                className={`p-3 rounded-lg border-2 text-center ${
+                  checkinDuration === minutes
+                    ? 'bg-blue-100 border-blue-500 text-blue-700'
+                    : 'bg-gray-100 border-gray-300'
+                }`}
+                onClick={() => setCheckinDuration(minutes)}
+              >
+                {minutes} min
+              </button>
+            ))}
+          </div>
+        </div>
+
+        <div className="bg-blue-50 p-3 rounded-lg">
+          <p className="text-sm text-blue-800">
+            We'll automatically alert your emergency contacts if you don't check in within {checkinDuration} minutes.
+            Your current location will be shared: <strong>{currentLocation}</strong>
+          </p>
+        </div>
+
+        <div className="flex gap-3">
+          <Button
+            variant="outline"
+            className="flex-1"
+            onClick={() => setShowCheckinModal(false)}
+          >
+            Cancel
+          </Button>
+          <Button
+            className="flex-1 bg-green-600 hover:bg-green-700"
+            onClick={() => startSafetyCheckin(checkinDuration)}
+          >
+            <CheckCircle className="w-4 h-4 mr-2" />
+            Start Check-in
+          </Button>
+        </div>
       </div>
     </div>
   </div>

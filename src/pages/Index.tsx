@@ -6,6 +6,8 @@ import QuickAccessWidget from "@/components/QuickAccessWidget";
 import FeatureCard from "@/components/FeatureCard";
 import EmergencyButton from "@/components/EmergencyButton";
 
+
+
 const Index = () => {
   const [greeting, setGreeting] = useState("");
   const [userName] = useState("Amazing Woman");
@@ -15,6 +17,8 @@ const Index = () => {
     if (hour < 12) setGreeting("Good morning");
     else if (hour < 17) setGreeting("Good afternoon");
     else setGreeting("Good evening");
+    
+    
   }, []);
 
   const features: Array<{
