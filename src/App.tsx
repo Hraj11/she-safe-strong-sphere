@@ -25,6 +25,7 @@ import Mentorship from "@/pages/Mentorship";
 import CareerAssessment from "./pages/CareerAssessment";
 import TalentMarketplace from "./pages/TalentMarketplace";
 
+
 const queryClient = new QueryClient();
 
 const App = () => (
