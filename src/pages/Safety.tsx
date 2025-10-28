@@ -106,6 +106,13 @@ const Safety = () => {
   const [destinationCoords, setDestinationCoords] = useState<[number, number] | null>(null);
   const [suggestions, setSuggestions] = useState<any[]>([]);
 const [showSuggestions, setShowSuggestions] = useState(false);
+const [emergencyContacts, setEmergencyContacts] = useState<any[]>([]);
+const [showEmergencyModal, setShowEmergencyModal] = useState(false);
+const [newContact, setNewContact] = useState({
+  name: "",
+  phone: "",
+  relationship: ""
+});
   const [reportData, setReportData] = useState({
     type: "harassment",
     description: "",
@@ -340,6 +347,7 @@ const [showSuggestions, setShowSuggestions] = useState(false);
     
     setSafetyTips(tips.slice(0, 6));
   };
+  
 
   // Calculate route with safety considerations
   // REAL routing using OSRM API
@@ -501,18 +509,57 @@ setRoutePath(route);
     );
   };
 
+  // Emergency contacts handlers
+const handleAddEmergencyContact = () => {
+  if (!newContact.name.trim() || !newContact.phone.trim()) {
+    alert("Please enter name and phone number");
+    return;
+  }
+
+  const updatedContacts = [...emergencyContacts, { ...newContact, id: Date.now() }];
+  setEmergencyContacts(updatedContacts);
+  localStorage.setItem("emergencyContacts", JSON.stringify(updatedContacts));
+  
+  setNewContact({ name: "", phone: "", relationship: "" });
+  setShowEmergencyModal(false);
+  alert("Emergency contact added successfully!");
+};
+
+const handleRemoveContact = (id: number) => {
+  const updatedContacts = emergencyContacts.filter(contact => contact.id !== id);
+  setEmergencyContacts(updatedContacts);
+  localStorage.setItem("emergencyContacts", JSON.stringify(updatedContacts));
+};
+
+// Load contacts from localStorage on component mount
+useEffect(() => {
+  const savedContacts = localStorage.getItem("emergencyContacts");
+  if (savedContacts) {
+    setEmergencyContacts(JSON.parse(savedContacts));
+  }
+}, []);
+
   const handleSOSAlert = () => {
-    const sosData = {
-      triggered: true,
-      time: new Date().toLocaleString(),
-      location: currentLocation,
-      coordinates: userCoordinates,
-      safetyScore: safetyScore,
-      safetyLevel: safetyLevel
-    };
-    localStorage.setItem("sosAlert", JSON.stringify(sosData));
-    alert(`🚨 SOS Alert sent to emergency contacts! Your location: ${currentLocation}`);
+  const sosData = {
+    triggered: true,
+    time: new Date().toLocaleString(),
+    location: currentLocation,
+    coordinates: userCoordinates,
+    safetyScore: safetyScore,
+    safetyLevel: safetyLevel,
+    emergencyContacts: emergencyContacts
   };
+  
+  localStorage.setItem("sosAlert", JSON.stringify(sosData));
+  
+  // Notify emergency contacts
+  if (emergencyContacts.length > 0) {
+    const contactNames = emergencyContacts.map(c => c.name).join(", ");
+    alert(`🚨 SOS Alert sent to: ${contactNames}\nYour location: ${currentLocation}`);
+  } else {
+    alert(`🚨 SOS Alert sent to emergency services!\nYour location: ${currentLocation}\n\nPlease add emergency contacts for personal notifications.`);
+  }
+};
 
   const handleRefreshSafety = () => {
     if (userCoordinates) {
@@ -662,6 +709,141 @@ setRoutePath(route);
             </>
           )}
         </Card>
+{/* Small Location Overview Map */}
+{!analyzing && userCoordinates && (
+  <div className="mt-6">
+    <h3 className="font-display font-bold mb-3 flex items-center gap-2">
+      <MapPin className="w-5 h-5 text-primary" />
+      Location Overview
+    </h3>
+    <div className="bg-white/60 rounded-lg p-4">
+      <div className="w-full h-48 rounded-lg overflow-hidden border-2 border-gray-200">
+        <MapContainer
+          center={[userCoordinates.lat, userCoordinates.lng]}
+          zoom={15}
+          style={{ height: '100%', width: '100%' }}
+          zoomControl={false}
+        >
+          <TileLayer
+            url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
+            attribution='&copy; OpenStreetMap contributors'
+          />
+          
+          {/* Current Location Marker */}
+          <Marker position={[userCoordinates.lat, userCoordinates.lng]} icon={safeIcon}>
+            <Popup>
+              <div className="text-center">
+                <strong>Your Location</strong>
+                <br />
+                {currentLocation}
+                <br />
+                <span className={`font-bold ${
+                  safetyLevel === "safe" ? "text-green-600" :
+                  safetyLevel === "moderate" ? "text-yellow-600" : "text-red-600"
+                }`}>
+                  {safetyLevel === "safe" ? "Safe Zone" : 
+                   safetyLevel === "moderate" ? "Use Caution" : "High Alert"}
+                </span>
+              </div>
+            </Popup>
+          </Marker>
+
+          {/* Nearby Police Stations */}
+          {policeStations.map((station, index) => (
+            <Marker 
+              key={index}
+              position={[station.lat, station.lng]}
+              icon={policeIcon}
+            >
+              <Popup>
+                <div className="text-center">
+                  <Building className="w-4 h-4 inline mr-1" />
+                  <strong>{station.name}</strong>
+                  <br />
+                  <Phone className="w-3 h-3 inline mr-1" />
+                  {station.phone}
+                  <br />
+                  📍 {station.distance} away
+                </div>
+              </Popup>
+            </Marker>
+          ))}
+
+          {/* Show hospitals/medical centers */}
+          {safetyLevel === "caution" && (
+            <>
+              <Marker 
+                position={[userCoordinates.lat + 0.003, userCoordinates.lng + 0.002]}
+                icon={dangerIcon}
+              >
+                <Popup>
+                  <div className="text-center">
+                    <strong>Medical Center</strong>
+                    <br />
+                    City General Hospital
+                    <br />
+                    📍 0.5 km away
+                    <br />
+                    🏥 Emergency: +1-555-0120
+                  </div>
+                </Popup>
+              </Marker>
+              <Marker 
+                position={[userCoordinates.lat - 0.002, userCoordinates.lng - 0.003]}
+                icon={dangerIcon}
+              >
+                <Popup>
+                  <div className="text-center">
+                    <strong>Urgent Care</strong>
+                    <br />
+                    24/7 Medical Services
+                    <br />
+                    📍 0.7 km away
+                    <br />
+                    🏥 Phone: +1-555-0121
+                  </div>
+                </Popup>
+              </Marker>
+            </>
+          )}
+        </MapContainer>
+      </div>
+      
+      {/* Safety Recommendations */}
+      <div className="mt-3 grid grid-cols-1 md:grid-cols-2 gap-3">
+        <div className={`p-3 rounded-lg ${
+          safetyLevel === "safe" ? "bg-green-100 text-green-800" :
+          safetyLevel === "moderate" ? "bg-yellow-100 text-yellow-800" :
+          "bg-red-100 text-red-800"
+        }`}>
+          <div className="font-semibold flex items-center gap-2">
+            <ShieldCheck className="w-4 h-4" />
+            Safety Status: {safetyLevel.toUpperCase()}
+          </div>
+          {safetyLevel === "caution" && (
+            <div className="text-sm mt-1">
+              • Stay in well-lit areas
+              <br />• Keep emergency contacts ready
+              <br />• Avoid isolated routes
+            </div>
+          )}
+        </div>
+        
+        <div className="bg-blue-100 text-blue-800 p-3 rounded-lg">
+          <div className="font-semibold flex items-center gap-2">
+            <Building className="w-4 h-4" />
+            Nearby Support
+          </div>
+          <div className="text-sm mt-1">
+            • {policeStations.length} police stations nearby
+            <br />• Emergency: 112 / 911
+            <br />• {safetyLevel === "caution" ? "2 medical centers" : "Medical help available"}
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+)}
 
         {/* Features Grid */}
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
@@ -691,47 +873,82 @@ setRoutePath(route);
           </Card>
 
           <Card className="p-6 card-glow">
-            <h3 className="font-display text-xl font-bold mb-4">
-              Travel Guardian
-            </h3>
-            <p className="text-muted-foreground mb-4">
-              Share your real-time safety status with trusted contacts.
-            </p>
-            <div className="space-y-3 mb-4">
-              <div className="flex items-center justify-between p-3 bg-muted/50 rounded-lg">
-                <span>Location Sharing</span>
-                <span
-                  className={`px-3 py-1 rounded-full text-sm font-semibold ${
-                    sharingActive
-                      ? "bg-green-100 text-green-800"
-                      : "bg-gray-200 text-gray-600"
-                  }`}
-                >
-                  {sharingActive ? "Active" : "Inactive"}
-                </span>
+  <h3 className="font-display text-xl font-bold mb-4">
+    Travel Guardian
+  </h3>
+  <p className="text-muted-foreground mb-4">
+    Share your real-time safety status with trusted contacts.
+  </p>
+  <div className="space-y-3 mb-4">
+    <div className="flex items-center justify-between p-3 bg-muted/50 rounded-lg">
+      <span>Location Sharing</span>
+      <span
+        className={`px-3 py-1 rounded-full text-sm font-semibold ${
+          sharingActive
+            ? "bg-green-100 text-green-800"
+            : "bg-gray-200 text-gray-600"
+        }`}
+      >
+        {sharingActive ? "Active" : "Inactive"}
+      </span>
+    </div>
+    <div className="flex items-center justify-between p-3 bg-muted/50 rounded-lg">
+      <span>Emergency Contacts</span>
+      <span className="text-sm font-semibold">{emergencyContacts.length} Added</span>
+    </div>
+    <div className="flex items-center justify-between p-3 bg-muted/50 rounded-lg">
+      <span>Current Safety Score</span>
+      <span className={`text-sm font-semibold ${
+        safetyScore >= 75 ? 'text-green-600' :
+        safetyScore >= 50 ? 'text-yellow-600' : 'text-red-600'
+      }`}>
+        {safetyScore}/100
+      </span>
+    </div>
+    
+    {/* Emergency Contacts List */}
+    {emergencyContacts.length > 0 && (
+      <div className="p-3 bg-blue-50 rounded-lg">
+        <h4 className="font-semibold mb-2 text-sm">Emergency Contacts:</h4>
+        <div className="space-y-2 max-h-32 overflow-y-auto">
+          {emergencyContacts.map((contact) => (
+            <div key={contact.id} className="flex justify-between items-center text-sm">
+              <div>
+                <span className="font-medium">{contact.name}</span>
+                <span className="text-gray-600 ml-2">{contact.relationship}</span>
               </div>
-              <div className="flex items-center justify-between p-3 bg-muted/50 rounded-lg">
-                <span>Emergency Contacts</span>
-                <span className="text-sm font-semibold">3 Added</span>
-              </div>
-              <div className="flex items-center justify-between p-3 bg-muted/50 rounded-lg">
-                <span>Current Safety Score</span>
-                <span className={`text-sm font-semibold ${
-                  safetyScore >= 75 ? 'text-green-600' :
-                  safetyScore >= 50 ? 'text-yellow-600' : 'text-red-600'
-                }`}>
-                  {safetyScore}/100
-                </span>
-              </div>
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => handleRemoveContact(contact.id)}
+                className="text-red-500 hover:text-red-700"
+              >
+                <X className="w-3 h-3" />
+              </Button>
             </div>
-            <Button
-              variant={sharingActive ? "destructive" : "outline"}
-              className="w-full"
-              onClick={handleShareLocation}
-            >
-              {sharingActive ? "Stop Sharing" : "Share Safety Status"}
-            </Button>
-          </Card>
+          ))}
+        </div>
+      </div>
+    )}
+  </div>
+  <div className="space-y-2">
+    <Button
+      variant={sharingActive ? "destructive" : "outline"}
+      className="w-full"
+      onClick={handleShareLocation}
+    >
+      {sharingActive ? "Stop Sharing" : "Share Safety Status"}
+    </Button>
+    <Button
+      variant="outline"
+      className="w-full"
+      onClick={() => setShowEmergencyModal(true)}
+    >
+      <Users className="w-4 h-4 mr-2" />
+      {emergencyContacts.length === 0 ? "Add Emergency Contact" : "Manage Contacts"}
+    </Button>
+  </div>
+</Card>
         </div>
 
         {/* Quick Actions */}
@@ -1040,6 +1257,8 @@ setRoutePath(route);
   </div>
 </div>
 
+
+
         <div className="bg-blue-50 p-3 rounded-lg">
           <p className="text-sm text-blue-800">
             We'll analyze the safest route and show nearby police stations if the area has safety concerns.
@@ -1072,6 +1291,77 @@ setRoutePath(route);
             )}
                     </Button>
                 </div>
+      </div>
+    </div>
+  </div>
+)}
+{/* Emergency Contact Modal */}
+{showEmergencyModal && (
+  <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+    <div className="bg-white p-6 rounded-2xl shadow-2xl w-full max-w-md">
+      <button
+        onClick={() => setShowEmergencyModal(false)}
+        className="absolute top-4 right-4 text-gray-500 hover:text-black"
+      >
+        <X className="w-6 h-6" />
+      </button>
+      
+      <h2 className="text-2xl font-bold mb-4 flex items-center gap-2">
+        <Users className="text-primary" />
+        {emergencyContacts.length === 0 ? "Add Emergency Contact" : "Manage Contacts"}
+      </h2>
+
+      <div className="space-y-4">
+        <div>
+          <label className="block text-sm font-medium mb-2">Contact Name *</label>
+          <Input
+            placeholder="Enter full name"
+            value={newContact.name}
+            onChange={(e) => setNewContact({...newContact, name: e.target.value})}
+          />
+        </div>
+
+        <div>
+          <label className="block text-sm font-medium mb-2">Phone Number *</label>
+          <Input
+            placeholder="+1 (555) 123-4567"
+            value={newContact.phone}
+            onChange={(e) => setNewContact({...newContact, phone: e.target.value})}
+          />
+        </div>
+
+        <div>
+          <label className="block text-sm font-medium mb-2">Relationship</label>
+          <Input
+            placeholder="Friend, Family, Colleague"
+            value={newContact.relationship}
+            onChange={(e) => setNewContact({...newContact, relationship: e.target.value})}
+          />
+        </div>
+
+        <div className="bg-blue-50 p-3 rounded-lg">
+          <p className="text-sm text-blue-800">
+            These contacts will be notified automatically during SOS alerts and can view your safety status when sharing is active.
+          </p>
+        </div>
+
+        <div className="flex gap-3">
+          <Button
+            variant="outline"
+            className="flex-1"
+            onClick={() => setShowEmergencyModal(false)}
+          >
+            Cancel
+          </Button>
+          <Button
+            className="flex-1 bg-gradient-to-r from-primary to-primary-light"
+            onClick={handleAddEmergencyContact}
+            disabled={!newContact.name.trim() || !newContact.phone.trim()}
+          >
+            <Users className="w-4 h-4 mr-2" />
+            Add Contact
+          </Button>
+        </div>
       </div>
     </div>
   </div>
