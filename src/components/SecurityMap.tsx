@@ -1,5 +1,7 @@
 import React from "react";
 
+
+
 // Define the incident structure
 export interface Incident {
   id: number;

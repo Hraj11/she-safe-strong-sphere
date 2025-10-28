@@ -1,3 +1,4 @@
+import { geocodeAddress, getPlaceSuggestions } from "@/utils/geocoding";
 import { useState, useEffect } from "react";
 import {
   Shield,
@@ -47,6 +48,7 @@ const policeIcon = new L.Icon({
   shadowSize: [41, 41]
 });
 
+
 const dangerIcon = new L.Icon({
   iconUrl: 'https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-red.png',
   shadowUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-shadow.png',
@@ -82,6 +84,7 @@ const Safety = () => {
   const [sharingActive, setSharingActive] = useState(false);
   const [routeData, setRouteData] = useState<any>(null);
   
+  
   // New states
   const [showReportModal, setShowReportModal] = useState(false);
   const [showDestinationModal, setShowDestinationModal] = useState(false);
@@ -94,12 +97,15 @@ const Safety = () => {
     police: 0,
     emergency: 0
   });
+  
   const [safetyTips, setSafetyTips] = useState<string[]>([]);
   const [userCoordinates, setUserCoordinates] = useState<{lat: number, lng: number} | null>(null);
   const [mapCenter, setMapCenter] = useState<[number, number]>([51.505, -0.09]);
   const [policeStations, setPoliceStations] = useState<any[]>([]);
   const [routePath, setRoutePath] = useState<[number, number][]>([]);
   const [destinationCoords, setDestinationCoords] = useState<[number, number] | null>(null);
+  const [suggestions, setSuggestions] = useState<any[]>([]);
+const [showSuggestions, setShowSuggestions] = useState(false);
   const [reportData, setReportData] = useState({
     type: "harassment",
     description: "",
@@ -336,80 +342,109 @@ const Safety = () => {
   };
 
   // Calculate route with safety considerations
-  const calculateSafeRoute = (start: [number, number], end: [number, number]) => {
-    const midPoint1: [number, number] = [
-      (start[0] + end[0]) * 0.3 + start[0] * 0.7,
-      (start[1] + end[1]) * 0.3 + start[1] * 0.7
-    ];
-    const midPoint2: [number, number] = [
-      (start[0] + end[0]) * 0.7 + start[0] * 0.3,
-      (start[1] + end[1]) * 0.7 + start[1] * 0.3
-    ];
+  // REAL routing using OSRM API
+const calculateSafeRoute = async (start: [number, number], end: [number, number]): Promise<[number, number][]> => {
+  try {
+    const response = await fetch(
+      `https://router.project-osrm.org/route/v1/driving/${start[1]},${start[0]};${end[1]},${end[0]}?overview=full&geometries=geojson`
+    );
+    const data = await response.json();
     
-    return [start, midPoint1, midPoint2, end];
-  };
-
-  // Handle destination search
-  const handleSetDestination = async () => {
-    if (!destination.trim() || !userCoordinates) return;
-    
-    setAnalyzing(true);
-    
-    try {
-      // Simulate geocoding the destination
-      const destLat = userCoordinates.lat + (Math.random() * 0.02 - 0.01);
-      const destLng = userCoordinates.lng + (Math.random() * 0.02 - 0.01);
-      const destinationCoords: [number, number] = [destLat, destLng];
-      
-      setDestinationCoords(destinationCoords);
-      
-      // Calculate safe route
-      const route = calculateSafeRoute([userCoordinates.lat, userCoordinates.lng], destinationCoords);
-      setRoutePath(route);
-      
-      // Analyze route safety
-      const areaType = getAreaTypeFromCoords(destLat, destLng);
-      const baseSafety = areaSafetyProfiles[areaType];
-      const baseScore = calculateSafetyScoreFromFactors(baseSafety);
-      
-      let outcome;
-      if (baseScore >= 70) {
-        outcome = {
-          level: "safe",
-          msg: `Route to ${destination} is through safe, well-maintained areas.`,
-          color: "green",
-          alt: "Direct route recommended - optimal safety conditions.",
-          showPolice: false
-        };
-      } else if (baseScore >= 45) {
-        outcome = {
-          level: "moderate", 
-          msg: `Route to ${destination} has some moderate-risk sections.`,
-          color: "yellow",
-          alt: "Stay on main roads and avoid shortcuts through poorly lit areas.",
-          showPolice: true
-        };
-      } else {
-        outcome = {
-          level: "caution",
-          msg: `Route to ${destination} passes through high-risk areas.`,
-          color: "red", 
-          alt: "Use alternative route via City Center - adds 12 minutes but much safer.",
-          showPolice: true
-        };
-      }
-      
-      setRouteData(outcome);
-      setShowModal(true);
-      setShowDestinationModal(false);
-      
-    } catch (error) {
-      console.error("Destination error:", error);
-      alert("Error finding destination. Please try again.");
+    if (data.routes && data.routes.length > 0) {
+      // Convert GeoJSON coordinates to [lat, lng] format
+      const coordinates = data.routes[0].geometry.coordinates;
+      return coordinates.map((coord: number[]) => [coord[1], coord[0]]); // [lng, lat] → [lat, lng]
     }
     
-    setAnalyzing(false);
-  };
+    // Fallback: straight line if routing fails
+    return [start, end];
+  } catch (error) {
+    console.error('Routing error:', error);
+    // Fallback: straight line
+    return [start, end];
+  }
+};
+
+  // Handle destination search
+  const handleInputChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+  const value = e.target.value;
+  setDestination(value);
+  
+  if (value.length > 2) {
+    const suggests = await getPlaceSuggestions(value);
+    setSuggestions(suggests);
+    setShowSuggestions(true);
+  } else {
+    setShowSuggestions(false);
+  }
+};
+
+  const handleSetDestination = async () => {
+  if (!destination.trim() || !userCoordinates) return;
+  
+  setAnalyzing(true);
+  
+  try {
+    // REAL GEOCODING - convert address to coordinates
+    const coords = await geocodeAddress(destination);
+    
+    if (!coords) {
+      alert('Location not found. Please try a more specific address like "New York, NY" or "Eiffel Tower, Paris"');
+      setAnalyzing(false);
+      return;
+    }
+    
+    const destinationCoords: [number, number] = [coords.lat, coords.lng];
+    setDestinationCoords(destinationCoords);
+    
+    // Calculate safe route
+    // Calculate REAL route
+const route = await calculateSafeRoute([userCoordinates.lat, userCoordinates.lng], destinationCoords);
+setRoutePath(route);
+    
+    // Analyze route safety
+    const areaType = getAreaTypeFromCoords(coords.lat, coords.lng);
+    const baseSafety = areaSafetyProfiles[areaType];
+    const baseScore = calculateSafetyScoreFromFactors(baseSafety);
+    
+    let outcome;
+    if (baseScore >= 70) {
+      outcome = {
+        level: "safe",
+        msg: `Route to ${destination} is through safe, well-maintained areas.`,
+        color: "green",
+        alt: "Direct route recommended - optimal safety conditions.",
+        showPolice: false
+      };
+    } else if (baseScore >= 45) {
+      outcome = {
+        level: "moderate", 
+        msg: `Route to ${destination} has some moderate-risk sections.`,
+        color: "yellow",
+        alt: "Stay on main roads and avoid shortcuts through poorly lit areas.",
+        showPolice: true
+      };
+    } else {
+      outcome = {
+        level: "caution",
+        msg: `Route to ${destination} passes through high-risk areas.`,
+        color: "red", 
+        alt: "Use alternative route via City Center - adds 12 minutes but much safer.",
+        showPolice: true
+      };
+    }
+    
+    setRouteData(outcome);
+    setShowModal(true);
+    setShowDestinationModal(false);
+    
+  } catch (error) {
+    console.error("Destination error:", error);
+    alert("Error finding destination. Please try again.");
+  }
+  
+  setAnalyzing(false);
+};
 
   const calculateSafetyScoreFromFactors = (factors: any) => {
     const weights = { lighting: 0.25, crowd: 0.2, transport: 0.2, police: 0.2, emergency: 0.15 };
@@ -976,14 +1011,34 @@ const Safety = () => {
 
       <div className="space-y-4">
         <div>
-          <label className="block text-sm font-medium mb-2">Where do you want to go?</label>
-          <Input
-            placeholder="Enter destination address..."
-            value={destination}
-            onChange={(e) => setDestination(e.target.value)}
-            onKeyPress={(e) => e.key === 'Enter' && handleSetDestination()}
-          />
-        </div>
+  <label className="block text-sm font-medium mb-2">Where do you want to go?</label>
+  <div className="relative">
+    <Input
+      placeholder="Enter destination address..."
+      value={destination}
+      onChange={handleInputChange}
+      onKeyPress={(e) => e.key === 'Enter' && handleSetDestination()}
+    />
+    
+    {/* Add suggestions dropdown */}
+    {showSuggestions && suggestions.length > 0 && (
+      <div className="absolute top-full left-0 right-0 bg-white border border-gray-300 rounded-lg mt-1 max-h-48 overflow-y-auto z-10 shadow-lg">
+        {suggestions.map((suggestion, index) => (
+          <div
+            key={index}
+            className="p-3 hover:bg-gray-100 cursor-pointer border-b border-gray-100 last:border-b-0"
+            onClick={() => {
+              setDestination(suggestion.display_name);
+              setShowSuggestions(false);
+            }}
+          >
+            {suggestion.display_name}
+          </div>
+        ))}
+      </div>
+    )}
+  </div>
+</div>
 
         <div className="bg-blue-50 p-3 rounded-lg">
           <p className="text-sm text-blue-800">
