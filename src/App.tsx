@@ -18,7 +18,12 @@ import HealthReminders from "./pages/health/HealthReminders";
 import HealthInsights from "./pages/health/HealthInsights";
 import HealthEmotions from "./pages/health/HealthEmotions";
 import SafetyInteractive from "./pages/SafetyInteractive";
-
+import EmpowerHer from "./pages/EmpowerHer";
+import Scholarships from "@/pages/Scholarships";
+import Courses from "@/pages/Courses";
+import Mentorship from "@/pages/Mentorship";
+import CareerAssessment from "./pages/CareerAssessment";
+import TalentMarketplace from "./pages/TalentMarketplace";
 
 const queryClient = new QueryClient();
 
@@ -44,8 +49,15 @@ const App = () => (
 <Route path="/health/lifestyle" element={<HealthLifestyle />} />
 <Route path="/health/reminders" element={<HealthReminders />} />
 <Route path="/health/insights" element={<HealthInsights />} />
-
+<Route path="/career-assessment" element={<CareerAssessment />} />
 <Route path="/safety" element={<SafetyInteractive />} />
+<Route path="/career" element={<EmpowerHer />} />
+<Route path="/scholarships" element={<Scholarships />} />
+<Route path="/courses" element={<Courses />} />
+<Route path="/mentorship" element={<Mentorship />} />
+<Route path="/marketplace" element={<TalentMarketplace />} />
+
+
 
 
           {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}

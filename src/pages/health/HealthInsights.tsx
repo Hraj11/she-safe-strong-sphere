@@ -84,7 +84,7 @@ const HealthInsights: React.FC = () => {
     if (avgWater < 1.5 && cycle && cycle.cycleLength > 35)
       insights.push("💡 AI Suggestion: Hydration may help regulate hormonal balance. Sip throughout the day!");
 
-    insights.push("✨ Overall, you’re doing great Harsh — small habits lead to big results 💪");
+    insights.push("✨ Overall, you’re doing great — small habits lead to big results 💪");
 
     return insights;
   };

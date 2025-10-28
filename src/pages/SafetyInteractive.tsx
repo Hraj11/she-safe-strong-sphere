@@ -1,100 +1,68 @@
-import { useState, useEffect } from "react";
-import { MapContainer, TileLayer, Marker, Popup } from "react-leaflet";
-import L from "leaflet";
-import { Button } from "@/components/ui/button";
-import { Card } from "@/components/ui/card";
-import { Shield, Navigation, MapPin } from "lucide-react";
-import "leaflet/dist/leaflet.css";
+import { useEffect, useState } from "react";
+import { GoogleMap, HeatmapLayer, useJsApiLoader } from "@react-google-maps/api";
 
-// Fix missing marker icons
-import markerIcon2x from "leaflet/dist/images/marker-icon-2x.png";
-import markerIcon from "leaflet/dist/images/marker-icon.png";
-import markerShadow from "leaflet/dist/images/marker-shadow.png";
-
-delete (L.Icon.Default.prototype as any)._getIconUrl;
-L.Icon.Default.mergeOptions({
-  iconRetinaUrl: markerIcon2x,
-  iconUrl: markerIcon,
-  shadowUrl: markerShadow,
-});
+const containerStyle = {
+  width: "100%",
+  height: "90vh",
+};
 
 const SafetyInteractive = () => {
-  const [position, setPosition] = useState<[number, number] | null>(null);
-  const [status, setStatus] = useState("Requesting location...");
+  const [position, setPosition] = useState<{ lat: number; lng: number } | null>(null);
+  const [error, setError] = useState<string | null>(null);
 
+  const { isLoaded } = useJsApiLoader({
+    googleMapsApiKey: "AIzaSyBNM8_ChJa3dZK3D063NQT0c2srefe6gwY",
+    libraries: ["visualization"], // Required for heatmap
+  });
+
+  // Ask for live location
   useEffect(() => {
-    console.log("🧭 useEffect triggered — starting geolocation check...");
-
     if (!navigator.geolocation) {
-      console.log("❌ Geolocation not supported by your browser.");
-      setStatus("Geolocation not supported.");
+      setError("Geolocation not supported by this browser.");
       return;
     }
 
     navigator.geolocation.getCurrentPosition(
       (pos) => {
-        console.log("✅ User location received:", pos.coords.latitude, pos.coords.longitude);
-        setPosition([pos.coords.latitude, pos.coords.longitude]);
-        setStatus("Location acquired!");
+        console.log("✅ Got location:", pos.coords);
+        setPosition({
+          lat: pos.coords.latitude,
+          lng: pos.coords.longitude,
+        });
       },
       (err) => {
-        console.error("❌ Geolocation error:", err);
-        setStatus("Unable to get location. Please allow location access.");
+        console.error("❌ Location error:", err);
+        setError("Please allow location access in your browser.");
       },
       { enableHighAccuracy: true, timeout: 10000 }
     );
   }, []);
 
+  // Example heatmap points
+  const heatmapData = [
+    new google.maps.LatLng(28.6139, 77.2090), // Delhi
+    new google.maps.LatLng(28.7041, 77.1025),
+    new google.maps.LatLng(28.5355, 77.3910),
+    new google.maps.LatLng(28.4595, 77.0266),
+  ];
+
+  if (!isLoaded) return <div>Loading map...</div>;
+  if (error) return <div className="text-red-500 p-6">{error}</div>;
+
   return (
-    <div className="min-h-screen bg-background p-6">
-      <header className="bg-gradient-to-r from-primary to-primary-light text-white p-6 rounded-lg mb-6">
-        <h1 className="font-display text-4xl font-bold flex items-center gap-3">
-          <Shield className="w-10 h-10" />
-          Real-Time Safety Map
-        </h1>
-        <p className="text-white/90 mt-2">Track your safety and current location in real-time</p>
-      </header>
-
-      <Card className="p-6 mb-8">
-        <h2 className="text-xl font-bold mb-4 flex items-center gap-2">
-          <MapPin className="w-5 h-5 text-primary" /> Current Location
-        </h2>
-        <p className="text-sm mb-2">{status}</p>
-
-        {position ? (
-          <MapContainer
-            center={position}
-            zoom={15}
-            scrollWheelZoom={true}
-            style={{
-              height: "400px",
-              width: "100%",
-              borderRadius: "12px",
-              zIndex: 1,
-            }}
-          >
-            <TileLayer
-              url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
-              attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
-            />
-            <Marker position={position}>
-              <Popup>You are here 📍</Popup>
-            </Marker>
-          </MapContainer>
-        ) : (
-          <p className="text-muted-foreground">Fetching your location...</p>
-        )}
-      </Card>
-
-      <Button
-        className="w-full bg-gradient-to-r from-primary to-primary-light"
-        onClick={() => {
-          alert("Analyzing route safety (demo mode)...");
-        }}
-      >
-        <Navigation className="w-4 h-4 mr-2" />
-        Analyze Route
-      </Button>
+    <div style={{ height: "100vh", width: "100%" }}>
+      {position ? (
+        <GoogleMap
+          mapContainerStyle={containerStyle}
+          center={position}
+          zoom={13}
+        >
+          {/* 🔥 Heatmap Example */}
+          <HeatmapLayer data={heatmapData} />
+        </GoogleMap>
+      ) : (
+        <div className="p-6 text-center">📍 Fetching your location...</div>
+      )}
     </div>
   );
 };
