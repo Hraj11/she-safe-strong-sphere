@@ -1,3 +1,6 @@
+import { SafetyDataService } from "@/utils/safetyData";
+import { HospitalDataService } from "@/utils/hospitalData";
+import { CrimeDataService } from "@/utils/crimeData";
 import { geocodeAddress, getPlaceSuggestions } from "@/utils/geocoding";
 import { useState, useEffect } from "react";
 import {
@@ -102,6 +105,7 @@ const Safety = () => {
   const [userCoordinates, setUserCoordinates] = useState<{lat: number, lng: number} | null>(null);
   const [mapCenter, setMapCenter] = useState<[number, number]>([51.505, -0.09]);
   const [policeStations, setPoliceStations] = useState<any[]>([]);
+  const [hospitals, setHospitals] = useState<any[]>([]);
   const [routePath, setRoutePath] = useState<[number, number][]>([]);
   const [destinationCoords, setDestinationCoords] = useState<[number, number] | null>(null);
   const [suggestions, setSuggestions] = useState<any[]>([]);
@@ -168,25 +172,31 @@ const [newContact, setNewContact] = useState({
   }, []);
 
   const getUserLocation = () => {
-    if (navigator.geolocation) {
-      navigator.geolocation.getCurrentPosition(
-        async (position) => {
-          const lat = position.coords.latitude;
-          const lng = position.coords.longitude;
-          setUserCoordinates({ lat, lng });
-          setMapCenter([lat, lng]);
-          
-          await getRealAddressFromCoords(lat, lng);
-          analyzeAreaSafety(lat, lng);
-          findNearbyPoliceStations(lat, lng);
-        },
-        async (error) => {
-          console.error("Error getting location:", error);
-          await getLocationByIP();
-        }
-      );
-    }
-  };
+  if (navigator.geolocation) {
+    navigator.geolocation.getCurrentPosition(
+      async (position) => {
+        const lat = position.coords.latitude;
+        const lng = position.coords.longitude;
+        console.log('User coordinates:', lat, lng); // Debug log
+        setUserCoordinates({ lat, lng });
+        setMapCenter([lat, lng]);
+        
+        await getRealAddressFromCoords(lat, lng);
+        await analyzeAreaSafety(lat, lng);
+        await findNearbyPoliceStations(lat, lng);
+
+        // Find real hospitals and store in state
+        const hospitalsData = await findNearbyHospitals(lat, lng);
+        console.log('Hospitals found:', hospitalsData); // Debug log
+        setHospitals(hospitalsData);
+      },
+      async (error) => {
+        console.error("Error getting location:", error);
+        await getLocationByIP();
+      }
+    );
+  }
+};
 
   // REAL Geocoding using OpenStreetMap Nominatim
   const getRealAddressFromCoords = async (lat: number, lng: number) => {
@@ -220,32 +230,264 @@ const [newContact, setNewContact] = useState({
   };
 
   // Find nearby police stations (simulated)
-  const findNearbyPoliceStations = (lat: number, lng: number) => {
-    const stations = [
+// Find real hospitals and medical centers
+const findNearbyHospitals = async (lat: number, lng: number) => {
+  try {
+    console.log('Fetching hospitals for:', lat, lng);
+    
+    const query = `
+      [out:json];
+      (
+        node["amenity"="hospital"](around:5000,${lat},${lng});
+        node["amenity"="clinic"](around:5000,${lat},${lng});
+        node["healthcare"="hospital"](around:5000,${lat},${lng});
+      );
+      out body;
+    `;
+    
+    const response = await fetch(
+      `https://overpass-api.de/api/interpreter`,
       {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/x-www-form-urlencoded',
+        },
+        body: `data=${encodeURIComponent(query)}`
+      }
+    );
+    
+    if (!response.ok) {
+      throw new Error(`Hospital API error: ${response.status}`);
+    }
+    
+    const data = await response.json();
+    console.log('Hospital API raw data:', data);
+    
+    if (data.elements && data.elements.length > 0) {
+      const hospitals = data.elements.map((hospital: any, index: number) => {
+        // Use real coordinates, don't randomize
+        const hospitalLat = hospital.lat;
+        const hospitalLng = hospital.lon;
+        
+        return {
+          id: hospital.id || index,
+          name: hospital.tags?.name || `Medical Facility ${index + 1}`,
+          lat: hospitalLat,
+          lng: hospitalLng,
+          type: hospital.tags?.amenity || hospital.tags?.healthcare || 'medical',
+          phone: hospital.tags?.phone || hospital.tags?.['contact:phone'] || 'Emergency: 112',
+          distance: 'Nearby'
+        };
+      });
+      
+      console.log('Processed hospitals:', hospitals);
+      return hospitals.slice(0, 5);
+    }
+    
+    // Fallback: return empty array if no hospitals found
+    console.log('No hospitals found in area');
+    return [];
+    
+  } catch (error) {
+    console.error('Hospital data error:', error);
+    return [];
+  }
+};
+
+// Add this helper function inside your component
+const getFallbackHospitals = (lat: number, lng: number) => {
+  const areaType = getAreaTypeFromCoords(lat, lng);
+  
+  const hospitals = [
+    {
+      id: 1,
+      name: "City General Hospital",
+      lat: lat + 0.006,
+      lng: lng + 0.004,
+      type: "hospital",
+      phone: "Emergency: 108",
+      distance: "1.2 km"
+    }
+  ];
+  
+  // Add more hospitals for urban areas
+  if (areaType === 'downtown' || areaType === 'university') {
+    hospitals.push({
+      id: 2,
+      name: "Community Medical Center",
+      lat: lat - 0.005,
+      lng: lng + 0.003,
+      type: "clinic", 
+      phone: "+91-XXX-XXXX",
+      distance: "0.8 km"
+    });
+  }
+  
+  console.log('Using fallback hospitals:', hospitals);
+  return hospitals;
+};
+
+// Find nearby police stations (simulated)
+// Find real police stations with better fallback
+const findNearbyPoliceStations = async (lat: number, lng: number) => {
+  // Define the fallback function inside this function
+  const getFallbackPoliceStations = (lat: number, lng: number) => {
+    const areaType = getAreaTypeFromCoords(lat, lng);
+    
+    let stations;
+    if (areaType === 'downtown' || areaType === 'university') {
+      stations = [
+        {
+          id: 1,
+          name: "Central Police Station",
+          lat: lat + 0.005,
+          lng: lng + 0.005,
+          phone: "Emergency: 100",
+          distance: "0.8 km"
+        },
+        {
+          id: 2,
+          name: "Local Police Outpost", 
+          lat: lat - 0.003,
+          lng: lng + 0.002,
+          phone: "Dial 100",
+          distance: "1.2 km"
+        },
+        {
+          id: 3,
+          name: "Traffic Police Station",
+          lat: lat + 0.002,
+          lng: lng - 0.004,
+          phone: "Emergency: 100",
+          distance: "1.0 km"
+        }
+      ];
+    } else {
+      stations = [
+        {
+          id: 1,
+          name: "Police Assistance",
+          lat: lat + 0.004,
+          lng: lng + 0.003,
+          phone: "Emergency: 100",
+          distance: "1.0 km"
+        },
+        {
+          id: 2,
+          name: "Local Police Station",
+          lat: lat - 0.002,
+          lng: lng - 0.003,
+          phone: "Dial 100", 
+          distance: "1.5 km"
+        }
+      ];
+    }
+    
+    console.log('Using fallback police stations:', stations);
+    setPoliceStations(stations);
+  };
+
+  try {
+    console.log('Fetching police stations for:', lat, lng);
+    
+    const query = `
+      [out:json][timeout:25];
+      (
+        node["amenity"="police"](around:5000,${lat},${lng});
+      );
+      out body;
+    `;
+    
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abobrt(), 8000);
+    
+    const response = await fetch(
+      `https://overpass-api.de/api/interpreter`,
+      {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/x-www-form-urlencoded',
+        },
+        body: `data=${encodeURIComponent(query)}`,
+        signal: controller.signal
+      }
+    );
+    
+    clearTimeout(timeoutId);
+    
+    if (!response.ok) {
+      throw new Error(`Police API error: ${response.status}`);
+    }
+    
+    const data = await response.json();
+    console.log('Police API raw data:', data);
+    
+    if (data.elements && data.elements.length > 0) {
+      const stations = data.elements.map((station: any, index: number) => ({
+        id: station.id || index,
+        name: station.tags?.name || `Police Station ${index + 1}`,
+        lat: station.lat,
+        lng: station.lon,
+        phone: station.tags?.phone || station.tags?.['contact:phone'] || 'Emergency: 100',
+        distance: `${(Math.random() * 1.5 + 0.5).toFixed(1)} km`
+      }));
+      
+      console.log('Processed police stations:', stations);
+      // Set ALL police stations, not just 3
+      setPoliceStations(stations);
+      return;
+    }
+    
+    // Fallback to simulated data
+    getFallbackPoliceStations(lat, lng);
+    
+  } catch (error) {
+    console.error('Police station data error:', error);
+    // Fallback to simulated data
+    getFallbackPoliceStations(lat, lng);
+  }
+};
+
+// Add this helper function
+const getFallbackPoliceStations = (lat: number, lng: number) => {
+  const areaType = getAreaTypeFromCoords(lat, lng);
+  
+  let stations;
+  if (areaType === 'downtown' || areaType === 'university') {
+    stations = [
+      {
+        id: 1,
         name: "Central Police Station",
         lat: lat + 0.005,
         lng: lng + 0.005,
-        phone: "+1-555-0110",
+        phone: "Emergency: 100",
         distance: "0.8 km"
       },
       {
-        name: "North Precinct",
-        lat: lat + 0.008,
-        lng: lng - 0.003,
-        phone: "+1-555-0111",
+        id: 2,
+        name: "Local Police Outpost", 
+        lat: lat - 0.003,
+        lng: lng + 0.002,
+        phone: "Dial 100",
         distance: "1.2 km"
-      },
-      {
-        name: "Community Police Center",
-        lat: lat - 0.004,
-        lng: lng + 0.006,
-        phone: "+1-555-0112",
-        distance: "0.9 km"
       }
     ];
-    setPoliceStations(stations);
-  };
+  } else {
+    stations = [
+      {
+        id: 1,
+        name: "Police Assistance",
+        lat: lat + 0.004,
+        lng: lng + 0.003,
+        phone: "Emergency: 100",
+        distance: "1.0 km"
+      }
+    ];
+  }
+  
+  console.log('Using fallback police stations:', stations);
+  setPoliceStations(stations);
+};
 
   // Fallback: Get location by IP
   const getLocationByIP = async () => {
@@ -274,79 +516,86 @@ const [newContact, setNewContact] = useState({
   };
 
   // Realistic safety analysis based on location
-  const analyzeAreaSafety = (lat: number, lng: number) => {
-    setAnalyzing(true);
+  // Realistic safety analysis based on location with crime data
+// Realistic safety analysis based on location with comprehensive data
+// Realistic safety analysis based on location with comprehensive data
+const analyzeAreaSafety = async (lat: number, lng: number) => {
+  setAnalyzing(true);
+  
+  try {
+    // Get comprehensive safety data
+    const safetyData = await SafetyDataService.getComprehensiveSafetyData(lat, lng);
+    console.log('Comprehensive safety data:', safetyData);
     
     setTimeout(() => {
       const areaType = getAreaTypeFromCoords(lat, lng);
       const areaProfile = areaSafetyProfiles[areaType];
       
+      // Adjust factors based on comprehensive safety data (using correct properties)
+      const policeAdjustment = safetyData.policeStations > 0 ? 1 : 0;
+      const hospitalAdjustment = (safetyData.hospitals + safetyData.clinics) > 0 ? 1 : 0;
+      
       const variedFactors = {
-        lighting: Math.max(1, Math.min(5, areaProfile.lighting + (Math.random() > 0.7 ? 1 : Math.random() > 0.3 ? -1 : 0))),
-        crowd: Math.max(1, Math.min(5, areaProfile.crowd + (Math.random() > 0.7 ? 1 : Math.random() > 0.3 ? -1 : 0))),
-        transport: Math.max(1, Math.min(5, areaProfile.transport + (Math.random() > 0.7 ? 1 : Math.random() > 0.3 ? -1 : 0))),
-        police: Math.max(1, Math.min(5, areaProfile.police + (Math.random() > 0.7 ? 1 : Math.random() > 0.3 ? -1 : 0))),
-        emergency: Math.max(1, Math.min(5, areaProfile.emergency + (Math.random() > 0.7 ? 1 : Math.random() > 0.3 ? -1 : 0)))
+        lighting: Math.max(1, Math.min(5, areaProfile.lighting)),
+        crowd: Math.max(1, Math.min(5, areaProfile.crowd)),
+        transport: Math.max(1, Math.min(5, areaProfile.transport)),
+        police: Math.max(1, Math.min(5, areaProfile.police + policeAdjustment)),
+        emergency: Math.max(1, Math.min(5, areaProfile.emergency + hospitalAdjustment))
       };
 
       setSafetyFactors(variedFactors);
       
-      const weights = { lighting: 0.25, crowd: 0.2, transport: 0.2, police: 0.2, emergency: 0.15 };
-      const score = Math.round(
-        Object.entries(variedFactors).reduce((total, [factor, value]) => 
-          total + value * 20 * weights[factor as keyof typeof weights], 0
-        )
-      );
+      // Use the comprehensive safety score directly
+      const finalScore = safetyData.safetyScore;
       
-      setSafetyScore(score);
+      setSafetyScore(finalScore);
       
-      if (score >= 75) setSafetyLevel("safe");
-      else if (score >= 50) setSafetyLevel("moderate");
+      if (finalScore >= 75) setSafetyLevel("safe");
+      else if (finalScore >= 50) setSafetyLevel("moderate");
       else setSafetyLevel("caution");
       
-      generateSafetyTips(score, variedFactors, areaType);
+      generateSafetyTips(finalScore, variedFactors, areaType, safetyData);
       setAnalyzing(false);
-    }, 1200);
-  };
+    }, 1500);
+    
+  } catch (error) {
+    console.error('Safety analysis error:', error);
+    setAnalyzing(false);
+  }
+};
 
-  const generateSafetyTips = (score: number, factors: typeof safetyFactors, areaType: keyof typeof areaSafetyProfiles) => {
-    const tips: string[] = [];
-    const areaProfile = areaSafetyProfiles[areaType];
+  const generateSafetyTips = (score: number, factors: typeof safetyFactors, areaType: keyof typeof areaSafetyProfiles, crimeData?: any) => {
+  const tips: string[] = [];
+  const areaProfile = areaSafetyProfiles[areaType];
+  
+  tips.push(...areaProfile.tips);
+  
+  // Add crime-based tips
+  // Add crime-based tips
+if (crimeData) {
+  if (crimeData.riskLevel === 'high') {
+    tips.push("• High crime area - stay extremely vigilant");
+    tips.push("• Avoid walking alone, especially at night");
+  } else if (crimeData.riskLevel === 'medium') {
+    tips.push("• Moderate crime area - maintain awareness");
+  }
+  
+  if (crimeData.policeStations > 0) {
+    tips.push(`• ${crimeData.policeStations} police station(s) in vicinity`);
+  } else {
+    tips.push("• Limited police presence in immediate area");
+  }
+  
+  // Add hospital information
+  if (crimeData.hospitals > 0 || crimeData.clinics > 0) {
+    const totalMedical = (crimeData.hospitals || 0) + (crimeData.clinics || 0);
+    tips.push(`• ${totalMedical} medical facility(s) nearby`);
+  }
+}
+  
+  setSafetyTips(tips.slice(0, 8)); // Increased to show more tips
+};
     
-    tips.push(...areaProfile.tips);
-    
-    if (factors.lighting <= 2) {
-      tips.push("• Carry a flashlight or use phone light at night");
-    } else if (factors.lighting >= 4) {
-      tips.push("• Well-lit area suitable for evening travel");
-    }
-    
-    if (factors.crowd <= 2) {
-      tips.push("• Avoid walking alone in isolated areas");
-    } else if (factors.crowd >= 4) {
-      tips.push("• Busy area provides natural surveillance");
-    }
-    
-    if (factors.transport <= 2) {
-      tips.push("• Plan your return trip in advance");
-      tips.push("• Consider ride-sharing services");
-    } else if (factors.transport >= 4) {
-      tips.push("• Multiple transport options available");
-    }
-    
-    if (factors.police <= 2) {
-      tips.push("• Keep emergency contacts easily accessible");
-    } else if (factors.police >= 4) {
-      tips.push("• Good police presence in the area");
-    }
-    
-    const isNight = new Date().getHours() > 18 || new Date().getHours() < 6;
-    if (isNight) {
-      tips.push("• Night travel: Stay in well-lit main roads");
-    }
-    
-    setSafetyTips(tips.slice(0, 6));
-  };
   
 
   // Calculate route with safety considerations
@@ -770,42 +1019,26 @@ useEffect(() => {
           ))}
 
           {/* Show hospitals/medical centers */}
-          {safetyLevel === "caution" && (
-            <>
-              <Marker 
-                position={[userCoordinates.lat + 0.003, userCoordinates.lng + 0.002]}
-                icon={dangerIcon}
-              >
-                <Popup>
-                  <div className="text-center">
-                    <strong>Medical Center</strong>
-                    <br />
-                    City General Hospital
-                    <br />
-                    📍 0.5 km away
-                    <br />
-                    🏥 Emergency: +1-555-0120
-                  </div>
-                </Popup>
-              </Marker>
-              <Marker 
-                position={[userCoordinates.lat - 0.002, userCoordinates.lng - 0.003]}
-                icon={dangerIcon}
-              >
-                <Popup>
-                  <div className="text-center">
-                    <strong>Urgent Care</strong>
-                    <br />
-                    24/7 Medical Services
-                    <br />
-                    📍 0.7 km away
-                    <br />
-                    🏥 Phone: +1-555-0121
-                  </div>
-                </Popup>
-              </Marker>
-            </>
-          )}
+          {/* Show real hospitals/medical centers */}
+{hospitals.map((hospital, index) => (
+  <Marker 
+    key={index}
+    position={[hospital.lat, hospital.lng]}
+    icon={dangerIcon}
+  >
+    <Popup>
+      <div className="text-center">
+        <strong>{hospital.name}</strong>
+        <br />
+        {hospital.type}
+        <br />
+        📍 {hospital.distance}
+        <br />
+        🏥 {hospital.phone}
+      </div>
+    </Popup>
+  </Marker>
+))}
         </MapContainer>
       </div>
       
@@ -835,10 +1068,10 @@ useEffect(() => {
             Nearby Support
           </div>
           <div className="text-sm mt-1">
-            • {policeStations.length} police stations nearby
-            <br />• Emergency: 112 / 911
-            <br />• {safetyLevel === "caution" ? "2 medical centers" : "Medical help available"}
-          </div>
+  • {policeStations.length} police stations nearby
+  <br />• Emergency: 112 / 911
+  <br />• {hospitals.length > 0 ? `${hospitals.length} medical centers nearby` : "Medical help available"}
+</div>
         </div>
       </div>
     </div>
@@ -950,8 +1183,7 @@ useEffect(() => {
   </div>
 </Card>
         </div>
-
-        {/* Quick Actions */}
+                {/* Quick Actions */}
         <Card className="p-6 bg-gradient-to-br from-accent/20 to-accent-dark/20 border-0">
           <h3 className="font-display text-xl font-bold mb-4">
             Quick Safety Actions
